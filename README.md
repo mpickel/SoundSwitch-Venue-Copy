@@ -8,7 +8,7 @@ und kann einzelne Attribut-Werte in Cues setzen.
 
 ## Inhalt
 
-- `specs/ssvenues.py` – Parser und Kopierwerkzeug (`info`, `fixtures`, `copy`, `set`)
+- `specs/ssvenues.py` – Parser und Kopierwerkzeug (`info`, `fixtures`, `copy`, `flags`, `set`)
 - `specs/cues_setzen.sh` – Beispielskript, das Attribute-Cues per `set` befüllt
 - `docu/Anleitung.md` – Schritt-für-Schritt-Anleitung
 - `docu/format.md` – Beschreibung des Binärformats
@@ -20,6 +20,7 @@ und kann einzelne Attribut-Werte in Cues setzen.
 python3 specs/ssvenues.py info  <SoundSwitchVenues.bin>
 python3 specs/ssvenues.py fixtures <SoundSwitchVenues.bin> "<Venue>"
 python3 specs/ssvenues.py copy  <SoundSwitchVenues.bin> "<Quell-Venue>" "<Ziel-Venue>" --write
+python3 specs/ssvenues.py flags <SoundSwitchVenues.bin> "<Quell-Venue>" "<Ziel-Venue>" --write   # nur Typ/Gruppen
 python3 specs/ssvenues.py set   <SoundSwitchVenues.bin> "<Venue>" "<Cue>" "<Gerät>" "Attribut=Wert" --write
 ```
 

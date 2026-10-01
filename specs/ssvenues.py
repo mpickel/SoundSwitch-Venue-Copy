@@ -26,6 +26,8 @@ Aufruf:
   python3 ssvenues.py info  <SoundSwitchVenues.bin>
   python3 ssvenues.py copy  <SoundSwitchVenues.bin> "<Quell-Venue>" "<Ziel-Venue>" [--write]
   python3 ssvenues.py fixtures <SoundSwitchVenues.bin> "<Venue>"      (Geräte mit Typ und Gruppe)
+  python3 ssvenues.py flags <SoundSwitchVenues.bin> "<Quell-Venue>" "<Ziel-Venue>" [--write]
+                                                   (nur Geräte-Typ und Gruppen übertragen, Rest unverändert)
   python3 ssvenues.py set   <SoundSwitchVenues.bin> "<Venue>" "<Attribute-Cue>" "<Gerät>" "Attribut=Wert" ... [--write]
 """
 import datetime
@@ -614,7 +616,7 @@ def main(argv):
             return 0
         print(f"Geschrieben. Backup: {write_with_backup(path, out)}")
         return 0
-    if len(argv) < 3 or argv[1] not in ("info", "copy", "fixtures"):
+    if len(argv) < 3 or argv[1] not in ("info", "copy", "fixtures", "flags"):
         print(__doc__)
         return 2
     path = argv[2]
@@ -642,8 +644,12 @@ def main(argv):
     if src is dst:
         print("Quelle und Ziel sind gleich.")
         return 1
-    out, log = build_copy(b, r, src, dst)
-    print(f"Kopiere Looks von {src['name']!r} nach {dst['name']!r}:")
+    if argv[1] == "flags":
+        out, log = copy_fixture_flags(b, r, src, dst)
+        print(f"Übertrage Geräte-Typ und Gruppen von {src['name']!r} nach {dst['name']!r}:")
+    else:
+        out, log = build_copy(b, r, src, dst)
+        print(f"Kopiere Looks von {src['name']!r} nach {dst['name']!r}:")
     for l in log:
         print("  " + l)
     r2 = parse(out)  # muss sauber parsen
