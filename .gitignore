@@ -1,0 +1,12 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# SoundSwitch binaries and backups (user data, not source)
+*.bin
+*.bin.bak*
+export/*
+!export/.gitkeep
