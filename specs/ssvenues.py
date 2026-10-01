@@ -13,6 +13,9 @@ Aufbau der Datei (siehe docu/format.md):
                 01000000, nven, nven x (GUID, 01000000, 01000000, n, n x 16 Bytes), 01000000, Name, GUID, colour, a
                 danach Reihenfolge (u32 n, n x u32) und opake Cue-Gruppen
   bank2       : u32 count; count x (GUID, 02000000, 96 Slots "33".."128", 128 x 25 Bytes)
+  fixture-rec : endet mit Profil-GUID + 6 u32: hash, Modus, DMX-Adresse-1, Profil-Hash, Typ, Gruppen
+                Typ: 2 Wash (Primary), 3 Wash (Secondary), 4 Wash (Tertiary), 11 Multi Cell (Primary),
+                12 Multi Cell (Secondary), weitere Werte unbekannt; Gruppen: Group1..4 (0 = keine)
   tail        : 46 Bytes (offA zeigt hierher), Tabelle (offset, len, 0, 1) je Fixture-Datensatz,
                 ffffffff, u32 7, "Default"
 
@@ -22,6 +25,7 @@ Slot = 05000000 01000000 Name, 5 Listen: A idx+double (12), B idx+8 (12), C idx+
 Aufruf:
   python3 ssvenues.py info  <SoundSwitchVenues.bin>
   python3 ssvenues.py copy  <SoundSwitchVenues.bin> "<Quell-Venue>" "<Ziel-Venue>" [--write]
+  python3 ssvenues.py fixtures <SoundSwitchVenues.bin> "<Venue>"      (Geräte mit Typ und Gruppe)
   python3 ssvenues.py set   <SoundSwitchVenues.bin> "<Venue>" "<Attribute-Cue>" "<Gerät>" "Attribut=Wert" ... [--write]
 """
 import datetime
@@ -361,6 +365,59 @@ def node_mapping(b, r, src, dst):
     return m
 
 
+# ---------------------------------------------------------------- Geräte-Datensätze (Typ, Gruppe)
+
+TYPE_NAMES = {2: "Wash (Primary)", 3: "Wash (Secondary)", 4: "Wash (Tertiary)",
+              11: "Multi Cell (Primary)", 12: "Multi Cell (Secondary)"}
+
+
+def fixture_records(b, r, g):
+    """Oberste Geräte-Datensätze einer Venue. Je Datensatz: Schlüssel (Profil-GUID, Modus, DMX-1), Typ, Gruppen
+    und die Datei-Offsets von Typ und Gruppen (die letzten zwei u32 des Datensatzes)."""
+    lo, hi = venue_bounds(r)[g]
+    recs = [(a, l) for a, l in r["tail"]["recs"] if lo <= a < hi]
+    out = []
+    for a, l in recs:
+        if any(x < a < x + y for x, y in recs):  # Unter-Datensatz (Zelle) überspringen
+            continue
+        end = a + l
+        guid = b[end - 40 : end - 24]
+        _, mode, dmx, _, typ, grp = struct.unpack_from("<6I", b, end - 24)
+        out.append({"key": (guid, mode, dmx), "dmx": dmx + 1, "type": typ, "groups": grp,
+                    "off_type": end - 8, "off_groups": end - 4})
+    return out
+
+
+def fixtures(b, r, venue):
+    recs = fixture_records(b, r, venue["guid"])
+    print(f"Geräte in {venue['name']!r} ({len(recs)}):")
+    for f in sorted(recs, key=lambda f: f["dmx"]):
+        tn = TYPE_NAMES.get(f["type"], f"Typ {f['type']}")
+        print(f"  DMX {f['dmx']:3d}  Profil {f['key'][0][3:7].hex()}  Modus {f['key'][1]}  {tn:24} Gruppen {f['groups']}")
+
+
+def copy_fixture_flags(b, r, src, dst):
+    """Überträgt Typ (Wash/Multi Cell ...) und Gruppen-Zuordnung je Gerät von src nach dst.
+    Geräte werden über Profil-GUID, Modus und DMX-Adresse zugeordnet. Gibt (neue Bytes, Log) zurück."""
+    out = bytearray(b)
+    srcs = {}
+    for f in fixture_records(b, r, src["guid"]):
+        srcs.setdefault(f["key"], []).append(f)
+    log, changed, missing = [], 0, []
+    for f in fixture_records(b, r, dst["guid"]):
+        cands = srcs.get(f["key"])
+        if not cands:
+            missing.append(f["dmx"])
+            continue
+        sf = cands.pop(0)
+        if (sf["type"], sf["groups"]) != (f["type"], f["groups"]):
+            struct.pack_into("<II", out, f["off_type"], sf["type"], sf["groups"])
+            changed += 1
+    log.append(f"Geräte-Typ und Gruppen: {changed} Geräte angepasst"
+               + (f" (ohne Gegenstück in Quelle, DMX: {missing})" if missing else ""))
+    return bytes(out), log
+
+
 # ---------------------------------------------------------------- Kopieren
 
 def remap_cue_sub(raw, newkey, m):
@@ -394,8 +451,8 @@ def remap_pos_sub(raw, newkey, m):
 def build_copy(b, r, src, dst):
     """Erzeugt neue Dateibytes, in denen alle Look-Daten von Venue src auch für Venue dst vorhanden sind."""
     sg, dg = src["guid"], dst["guid"]
-    log = []
     m = node_mapping(b, r, src, dst)
+    b, log = copy_fixture_flags(b, r, src, dst)  # gleiche Länge, Offsets bleiben gültig
 
     def fmt_drop(d):
         return f" (verwaiste Verweise in Quelle ignoriert: {sorted(set(d))})" if d else ""
@@ -557,7 +614,7 @@ def main(argv):
             return 0
         print(f"Geschrieben. Backup: {write_with_backup(path, out)}")
         return 0
-    if len(argv) < 3 or argv[1] not in ("info", "copy"):
+    if len(argv) < 3 or argv[1] not in ("info", "copy", "fixtures"):
         print(__doc__)
         return 2
     path = argv[2]
@@ -565,6 +622,13 @@ def main(argv):
     r = parse(b)
     if argv[1] == "info":
         info(b, r)
+        return 0
+    if argv[1] == "fixtures":
+        venue = next((v for v in r["venues"] if len(argv) > 3 and v["name"] == argv[3]), None)
+        if venue is None:
+            print(f"Venue nicht gefunden. Vorhanden: {[v['name'] for v in r['venues']]}")
+            return 1
+        fixtures(b, r, venue)
         return 0
     if len(argv) < 5:
         print(__doc__)

@@ -1,7 +1,8 @@
 # Venue mit allen Looks kopieren (SoundSwitch 2.11)
 
 SoundSwitch kopiert beim „+“ nur die Geräte einer Venue. Statische Looks, Positionen und
-Attribute-Cues (Gobo, Rotation, Laser …) bleiben in der Kopie leer. Das Skript
+Attribute-Cues (Gobo, Rotation, Laser …) bleiben in der Kopie leer, Geräte-Typ (Wash/Multi Cell,
+Primary/Secondary …) und Gruppen-Zuordnung werden zurückgesetzt. Das Skript
 `specs/ssvenues.py` überträgt sie nachträglich.
 
 ## Ablauf

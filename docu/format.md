@@ -14,6 +14,7 @@ Texte als `u32 Zeichenzahl inkl. Null` + UTF-16LE. GUIDs 16 Bytes roh.
 | Attribute-Cues | `02000000 00000000`, dann je Cue: `01000000`, n Venue-Einträge (`GUID 01 01 n × (1, Knoten, Attribut, Wert)`), `01000000 Name GUID Farbe a`; danach Reihenfolge-Liste |
 | Cue-Gruppen | Ordner wie „DJ Blazor“, „KLS“, „Hydra“ (nicht weiter entschlüsselt, wird unverändert übernommen) |
 | Looks 33–128 | `u32 Anzahl`, je Schlüssel: `GUID 02000000` + 96 Slots + 128 × 25 Bytes (Typ 6) |
+| Geräte-Datensatz-Ende | jeder oberste Geräte-Datensatz endet mit `Profil-GUID` + 6 × u32: `hash, Modus, DMX-Adresse−1, Profil-Hash, Typ, Gruppen`. Typ: 2 Wash (Primary), 3 Wash (Secondary), 4 Wash (Tertiary), 11 Multi Cell (Primary), 12 Multi Cell (Secondary), andere Werte unbekannt. Gruppen: Group1–4, 0 = keine. SoundSwitch setzt beide beim „+“-Kopieren zurück; `copy` überträgt sie per (GUID, Modus, DMX) |
 | Tail | 46 Bytes, Tabelle `(Offset, Länge, 0, 1)` je Geräte-Datensatz, `ffffffff`, `u32 7`, `"Default"` |
 
 Look-Slot: `05000000 01000000 Name`, dann 5 Listen: A `Index + double` (12 B),
