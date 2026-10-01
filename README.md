@@ -9,7 +9,7 @@ und kann einzelne Attribut-Werte in Cues setzen.
 ## Inhalt
 
 - `specs/ssvenues.py` – Parser und Kopierwerkzeug (`info`, `copy`, `set`)
-- `specs/cues_testkopie_2026-10-01.sh` – Beispielskript, das Attribute-Cues per `set` befüllt
+- `specs/cues_setzen.sh` – Beispielskript, das Attribute-Cues per `set` befüllt
 - `docu/Anleitung.md` – Schritt-für-Schritt-Anleitung
 - `docu/format.md` – Beschreibung des Binärformats
 - `docu/DMX-Kanaele.md` – DMX-Kanalbelegung der verwendeten Geräte
