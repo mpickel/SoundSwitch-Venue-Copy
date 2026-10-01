@@ -130,9 +130,11 @@ def parse_positions(p):
 
 
 def parse_slot(p):
+    s0 = p.o
     p.expect(5, "slot tag")
     p.expect(1, "slot tag2")
     name = p.str()
+    head = p.b[s0 : p.o]
     lists = []
     # A: idx+double (Intensität), B: idx+8B, C: idx+8B (Farbe), D: idx+GUID (Positions-Preset), E: 16B (Attribute)
     for width in (12, 12, 12, 20, 16):
@@ -140,7 +142,7 @@ def parse_slot(p):
         if n > 10000:
             raise ValueError(f"slot {name!r}: implausible list count {n:#x} at {p.o-4:#x}")
         lists.append([p.raw(width) for _ in range(n)])
-    return {"name": name, "lists": lists}
+    return {"name": name, "head": head, "lists": lists}
 
 
 def parse_looklists(p):
@@ -302,7 +304,9 @@ def venue_bounds(r):
 
 
 def tree_nodes(b, lo, hi):
-    """Knoten des Geräte-Baums einer Venue: 03000000 02000000 <id> 01000000 <name>, in Dateireihenfolge."""
+    """Knoten des Geräte-Baums einer Venue in Dateireihenfolge: (Knoten-ID, Name, Look-Nummer).
+    Knoten: 03000000 02000000 <id> 01000000 <name>, bei Geräten/Zellen folgt <look-nr> <farbe> ...;
+    Gruppen-Knoten haben keine Look-Nummer (None), dort folgt direkt ein weiterer String."""
     out = []
     for m in NODE.finditer(b, lo, hi):
         n = struct.unpack("<I", m.group(2))[0]
@@ -312,8 +316,10 @@ def tree_nodes(b, lo, hi):
             t = b[m.end() : m.end() + 2 * n - 2].decode("utf-16le")
         except UnicodeDecodeError:
             continue
-        if t.isprintable():
-            out.append((struct.unpack("<I", m.group(1))[0], t))
+        if not t.isprintable():
+            continue
+        lid, colour = struct.unpack_from("<II", b, m.end() + 2 * n)
+        out.append((struct.unpack("<I", m.group(1))[0], t, lid if colour >> 24 == 0xFF else None))
     return out
 
 
@@ -349,22 +355,49 @@ def profile_attributes(b, r, g, profile):
     return out
 
 
+def align(a, c):
+    """Längste gemeinsame Teilfolge der Namen zweier Knotenlisten; liefert Index-Paare (i, j)."""
+    n, m = len(a), len(c)
+    L = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        for j in range(m - 1, -1, -1):
+            L[i][j] = L[i + 1][j + 1] + 1 if a[i][1] == c[j][1] else max(L[i + 1][j], L[i][j + 1])
+    pairs, i, j = [], 0, 0
+    while i < n and j < m:
+        if a[i][1] == c[j][1]:
+            pairs.append((i, j))
+            i, j = i + 1, j + 1
+        elif L[i + 1][j] >= L[i][j + 1]:
+            i += 1
+        else:
+            j += 1
+    return pairs
+
+
 def node_mapping(b, r, src, dst):
-    """Ordnet Knoten-IDs der Quell-Venue den IDs der Ziel-Venue zu (gleicher Baum, gleiche Reihenfolge)."""
+    """Ordnet Knoten der Quell-Venue denen der Ziel-Venue zu (Namen in Baum-Reihenfolge; Geräte, die nur
+    in einer Venue vorkommen, bleiben ohne Zuordnung). Liefert (Knoten-ID-Map, Look-Nummern-Map, Log)."""
     a = tree_nodes(b, *tree_range(r, src["guid"]))
     c = tree_nodes(b, *tree_range(r, dst["guid"]))
-    if [t for _, t in a] != [t for _, t in c]:
-        raise ValueError(
-            f"Geräte-Baum von {src['name']!r} und {dst['name']!r} unterscheidet sich "
-            f"({len(a)} vs {len(c)} Knoten) – Ziel muss eine unveränderte Kopie der Quelle sein.")
-    m, bad = {}, set()
-    for (i, _), (j, _) in zip(a, c):
-        if m.get(i, j) != j:
-            bad.add(i)
-        m[i] = j
+    pairs = align(a, c)
+    m, lm, bad = {}, {}, set()
+    for i, j in pairs:
+        if m.get(a[i][0], c[j][0]) != c[j][0]:
+            bad.add(a[i][0])
+        m[a[i][0]] = c[j][0]
+        if a[i][2] is not None and c[j][2] is not None:
+            lm[a[i][2]] = c[j][2]
     for i in bad:
         del m[i]
-    return m
+    log = []
+    only_src = [a[i][1] for i in set(range(len(a))) - {i for i, _ in pairs} if a[i][2] is not None]
+    only_dst = [c[j][1] for j in set(range(len(c))) - {j for _, j in pairs} if c[j][2] is not None]
+    log.append(f"Geräte-Baum: {len(pairs)} von {len(a)} Knoten zugeordnet")
+    if only_src:
+        log.append(f"  nur in {src['name']!r} (Werte entfallen): {sorted(set(only_src))}")
+    if only_dst:
+        log.append(f"  nur in {dst['name']!r} (bekommen keine Werte): {sorted(set(only_dst))}")
+    return m, lm, log
 
 
 # ---------------------------------------------------------------- Geräte-Datensätze (Typ, Gruppe)
@@ -436,6 +469,24 @@ def remap_cue_sub(raw, newkey, m):
     return newkey + raw[16:24] + struct.pack("<I", len(ents)) + b"".join(ents), len(ents), dropped
 
 
+def remap_slot(slot, m, lm):
+    """Look-Slot: Listen A-D (Look-Nummer + Wert) verweisen über die Look-Nummer auf Geräte,
+    Liste E (1, Knoten, Attribut, Wert) wie die Attribute-Cues über die Knoten-ID."""
+    out = slot["head"]
+    dropped = set()
+    for li, lst in enumerate(slot["lists"]):
+        mp, at = (m, 4) if li == 4 else (lm, 0)
+        ents = []
+        for e in lst:
+            k = struct.unpack_from("<I", e, at)[0]
+            if k in mp:
+                ents.append(e[:at] + struct.pack("<I", mp[k]) + e[at + 4 :])
+            else:
+                dropped.add(k)
+        out += struct.pack("<I", len(ents)) + b"".join(ents)
+    return out, dropped
+
+
 def remap_pos_sub(raw, newkey, m):
     """Positions-Eintrag: GUID, 02, n, n x (u32 knoten, u32 1, 8 Bytes)."""
     n = struct.unpack_from("<I", raw, 20)[0]
@@ -453,8 +504,9 @@ def remap_pos_sub(raw, newkey, m):
 def build_copy(b, r, src, dst):
     """Erzeugt neue Dateibytes, in denen alle Look-Daten von Venue src auch für Venue dst vorhanden sind."""
     sg, dg = src["guid"], dst["guid"]
-    m = node_mapping(b, r, src, dst)
-    b, log = copy_fixture_flags(b, r, src, dst)  # gleiche Länge, Offsets bleiben gültig
+    m, lm, log = node_mapping(b, r, src, dst)
+    b, flog = copy_fixture_flags(b, r, src, dst)  # gleiche Länge, Offsets bleiben gültig
+    log += flog
 
     def fmt_drop(d):
         return f" (verwaiste Verweise in Quelle ignoriert: {sorted(set(d))})" if d else ""
@@ -477,10 +529,15 @@ def build_copy(b, r, src, dst):
     # looklists
     ll = struct.pack("<I", len(r["looklists"]))
     srcll = next(x for x in r["looklists"] if x["key"] == sg)
+    newraw, named = b"", []
+    for s in srcll["slots"]:
+        raw, d = remap_slot(s, m, lm)
+        newraw += raw
+        if not s["name"].isdigit():
+            named.append(s["name"])
     for x in r["looklists"]:
-        raw = srcll["raw"] if x["key"] == dg else x["raw"]
+        raw = newraw if x["key"] == dg else x["raw"]
         ll += x["key"] + b"\x01\x00\x00\x00\x20\x00\x00\x00" + raw
-    named = [s["name"] for s in srcll["slots"] if not s["name"].isdigit()]
     log.append(f"Statische Looks: {len(named)} Slots übernommen: {named}")
 
     # attrcues

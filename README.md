@@ -9,6 +9,7 @@ und kann einzelne Attribut-Werte in Cues setzen.
 ## Inhalt
 
 - `specs/ssvenues.py` – Parser und Kopierwerkzeug (`info`, `fixtures`, `copy`, `flags`, `set`)
+- `specs/test_ssvenues.py` – Tests gegen die echte Datei (`python3 -m unittest specs/test_ssvenues.py`)
 - `specs/cues_setzen.sh` – Beispielskript, das Attribute-Cues per `set` befüllt
 - `docu/Anleitung.md` – Schritt-für-Schritt-Anleitung
 - `docu/format.md` – Beschreibung des Binärformats

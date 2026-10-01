@@ -25,15 +25,19 @@ Primary/Secondary …) und Gruppen-Zuordnung werden zurückgesetzt. Das Skript
 
 4. SoundSwitch starten, in der neuen Venue ein paar Looks, Positionen und Cues prüfen.
    Im Geräte-Tab sollten Typ (z. B. „Multi Cell (Primary)“) und Group1–4 wie in der Quelle stehen.
-5. **Erst jetzt** in der neuen Venue Geräte entfernen, die du für dieses Setup nicht dabei hast.
+5. In der neuen Venue Geräte entfernen, die du für dieses Setup nicht dabei hast. `copy` kann
+   danach jederzeit wiederholt werden (z. B. nach neuen Looks in „Default“) – Geräte werden über
+   Namen und Reihenfolge im Gerätebaum zugeordnet, fehlende Geräte werden übersprungen.
 
 `copy` überträgt: Geräte-Typ und Gruppen, Positions-Presets, statische Looks (Slots 1–32) und
 Attribute-Cues. Geräte-Farben werden nicht übertragen.
 
 ## Wichtig
 
-- Die Ziel-Venue muss eine **unveränderte** Kopie der Quelle sein (gleiche Geräte, gleiche
-  Reihenfolge). Sonst bricht das Skript mit einer Meldung ab und schreibt nichts.
+- Die Ziel-Venue darf weniger Geräte haben als die Quelle. Das Skript meldet, welche Geräte
+  nur in der Quelle („Werte entfallen“) oder nur im Ziel („bekommen keine Werte“) vorkommen.
+  Gleichnamige Geräte (Inno Spots, Hydrabeam-Köpfe) werden über ihre Reihenfolge zugeordnet;
+  die Reihenfolge der Geräte im Baum sollte deshalb der Quelle entsprechen.
 - Vorhandene Looks und Cues der Ziel-Venue werden **überschrieben**.
 - SoundSwitch muss beim Schreiben geschlossen sein.
 - Meldung „verwaiste Verweise in Quelle ignoriert“: Die Quell-Venue enthält noch Werte für
@@ -106,3 +110,7 @@ Backup in `SoundSwitchVenues.bin` umbenennen.
 - 01.10.2026: Typ/Gruppen-Verlust beim „+“ gefunden (Beleg: unberührte SoundSwitch-Kopie hatte
   überall „Wash (Primary)“, Gruppe 0). Mit `flags` aus „Default“ nachgetragen in Basic-CBL-PT,
   Basic-CBL, Basic-CBL-PT-Hy, KLS-PT-Hy, KLS-PT; „Test Kopie“ per `copy`.
+- 01.10.2026: Fehler in `copy` gefunden: statische Looks wurden roh übernommen, obwohl ihre
+  Geräte-Nummern (Look-Nummer hinter dem Gerätenamen im Baum) je Venue anders sind. Folge:
+  in „KLS-PT“ waren z. B. R1/L1 der Maxis dunkel, Thunderwash angehakt. Behoben, Looks aus
+  „Default“ in alle sechs Venues neu kopiert. Tests: `python3 -m unittest specs/test_ssvenues.py`.

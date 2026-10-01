@@ -31,8 +31,16 @@ SoundSwitch vergibt beim Kopieren einer Venue neue, lückenlose Knoten-IDs. Desh
 es nicht, Einträge nur mit der neuen Venue-GUID zu versehen: Die Knoten-IDs müssen über
 Namen und Reihenfolge im Baum von der Quelle auf die Kopie umgerechnet werden.
 
-Statische Looks (Slots) verwenden ein anderes Nummernsystem, das beim Kopieren
-gleich bleibt – sie lassen sich 1:1 übernehmen.
+Statische Looks (Slots) verwenden in den Listen A–D ein **zweites Nummernsystem**: die
+Look-Nummer, die im Baum direkt hinter dem Gerätenamen steht (`<Name> <Look-Nr> <Farbe ARGB> …`,
+nur bei Geräten und Zellen; Gruppen-Knoten haben keine). Auch diese Nummern vergibt SoundSwitch
+beim Kopieren neu (z. B. L-Maxi 02 L1: Default 32 → KLS-PT 30). Liste E eines Slots verwendet
+wie die Attribute-Cues die Knoten-ID (`1, Knoten, Attribut, Wert`).
+
+Beim Kopieren werden beide Nummern über die Gerätenamen in Baum-Reihenfolge zugeordnet
+(längste gemeinsame Teilfolge). Geräte, die es nur in einer der beiden Venues gibt, bleiben
+ohne Zuordnung; ihre Werte entfallen bzw. bleiben leer. Bis 01.10.2026 wurden Look-Slots roh
+kopiert, wodurch Werte in Kopien auf falschen Geräten landeten.
 
 ## Bestätigt durch Vergleich
 
