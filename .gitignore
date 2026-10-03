@@ -5,8 +5,11 @@
 __pycache__/
 *.pyc
 
-# SoundSwitch binaries and backups (user data, not source)
+# Never commit SoundSwitch project data or backups
 *.bin
-*.bin.bak*
-export/*
-!export/.gitkeep
+*.bak
+*.bin.*
+*.ssproj/
+
+# Private notes and scripts for my own rig
+local/
